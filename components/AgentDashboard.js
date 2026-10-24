@@ -34,6 +34,8 @@ export default function AgentDashboard({ user, onLogout }) {
   const [momoRef, setMomoRef] = useState('');
     const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
 
+      const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState('');
   const { theme } = useTheme();
   const { t } = useLanguage();
   const C = { ...theme, white: theme.card };
@@ -442,6 +444,7 @@ export default function AgentDashboard({ user, onLogout }) {
   const PeriodTabRow = ({ period, setPeriod }) => ( <View style={styles.periodRow}> {['day', 'month', 'year', 'all', 'custom'].map((p) => ( <TouchableOpacity key={p} style={[styles.periodChip, period === p && styles.periodChipActive]} onPress={() => setPeriod(p)}> <Text style={period === p ? styles.periodTextActive : styles.periodText}>{p === 'day' ? 'Today' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : p === 'all' ? 'All' : 'Custom'}</Text> </TouchableOpacity> ))} </View> );
 
       const navItems = [ 
+            { key: 'calculator', label: '🧮 Quick Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
     { key: 'ai', label: '✨ AI Assistant', color: C.gold || '#b8860b', onPress: () => setAiAssistantOpen(true) }, 
     { key: 'voicenotes', label: '🎙️ Voice Notes', color: C.green, onPress: () => setVoiceNotesOpen(true) }, 
     { key: 'lessons', label: '📖 Sales Playbook', color: C.green, onPress: () => setLessonsModalOpen(true) }, 
@@ -910,6 +913,45 @@ export default function AgentDashboard({ user, onLogout }) {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* QUICK CALCULATOR MODAL */}
+      <Modal visible={calculatorOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxWidth: 400, width: '90%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>🧮 Quick Calculator</Text>
+              <TouchableOpacity onPress={() => setCalculatorOpen(false)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Close ✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput 
+              style={[styles.input, { fontSize: 24, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20 }]} 
+              keyboardType="numeric" 
+              value={calcDisplay} 
+              onChangeText={setCalcDisplay} 
+              placeholder="0"
+            />
+            
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.', '+'].map((btn) => (
+                <TouchableOpacity 
+                  key={btn} 
+                  style={{ width: '22%', backgroundColor: C.bg, padding: 16, borderRadius: 12, alignItems: 'center' }}
+                  onPress={() => setCalcDisplay(prev => prev + btn)}
+                >
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={{ width: '48%', backgroundColor: '#fee2e2', padding: 16, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay('')}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#dc2626' }}>Clear (C)</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 12, color: C.sub, textAlign: 'center', marginTop: 12 }}>
+              Note: This is a basic text input. For advanced math (like 50 * 12), just type it in.
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <CustomerNoteModal visible={notesModalOpen} storeName={notesStore} userId={user.id} onClose={() => setNotesModalOpen(false)} />
       <AccountSettingsModal visible={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} currentPhone={user.phone} onUpdated={onLogout} />
       <BarcodeScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} products={products} onScanned={(product) => { if (scanTarget?.type === 'saleItem') updateSaleItem(scanTarget.index, 'product', product); else if (scanTarget?.type === 'collect') setCollectProduct(product); }} />

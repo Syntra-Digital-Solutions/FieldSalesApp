@@ -39,6 +39,10 @@ export default function ManagerDashboard({ user, onLogout }) {
   const styles = getStyles(C);
   const [screen, setScreen] = useState('overview'); 
 
+  // 🧮 CALCULATOR STATE (Now in the correct place)
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState('');
+
   const [sales, setSales] = useState([]);
   const [issues, setIssues] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -990,6 +994,7 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
   );
 
     const navItems = [
+    { key: 'calculator', label: '🧮 Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
     { key: 'ai', label: '✨ AI Assistant', color: C.gold || '#b8860b', onPress: () => setAiAssistantOpen(true) },
     { key: 'overview', label: '🏠 Overview', color: C.blue, badge: pendingEdits.length ? String(pendingEdits.length) : null, onPress: () => setScreen('overview') },
     { key: 'agents', label: '👥 My Agents', color: C.blue, badge: unseenAlertCount ? String(unseenAlertCount) : null, onPress: () => setScreen('agents') },
@@ -1136,12 +1141,20 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
             <Text style={{ fontSize: 12, color: C.sub, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>This Month</Text>
             <Text style={{ fontSize: 20, fontWeight: '800', color: C.ink, marginTop: 8 }}>GHS {thisMonthCash.toFixed(0)}</Text>
           </View>
-          <View style={{ flex: 1, minWidth: '45%', backgroundColor: C.white, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}>
+                    <View style={{ flex: 1, minWidth: '45%', backgroundColor: C.white, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}>
             <Text style={{ fontSize: 12, color: C.sub, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Net Profit</Text>
             <Text style={{ fontSize: 20, fontWeight: '800', color: netProfit >= 0 ? C.green : C.red, marginTop: 8 }}>
               GHS {netProfit.toFixed(0)}
             </Text>
             <Text style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Exp: GHS {thisMonthExpenses.toFixed(0)}</Text>
+          </View>
+          {/*  NEW COMMISSION CARD */}
+          <View style={{ flex: 1, minWidth: '45%', backgroundColor: C.white, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}>
+            <Text style={{ fontSize: 12, color: C.sub, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Agents' Commission</Text>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#b45309', marginTop: 8 }}>
+              GHS {sales.filter(s => isSameMonth(new Date(s.created_at), today)).reduce((sum, s) => sum + Number(s.commission_earned || 0), 0).toFixed(0)}
+            </Text>
+            <Text style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>Paid this month</Text>
           </View>
         </View>
 
@@ -2563,6 +2576,42 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
                 );
               })()}
             </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+            {/* QUICK CALCULATOR MODAL */}
+      <Modal visible={calculatorOpen} transparent animationType="fade">
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalContent, { maxWidth: 400 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>🧮 Manager Calculator</Text>
+              <TouchableOpacity onPress={() => setCalculatorOpen(false)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Close ✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput 
+              style={[styles.input, { fontSize: 24, textAlign: 'right', fontWeight: '800', color: C.blue, paddingVertical: 20 }]} 
+              keyboardType="numeric" 
+              value={calcDisplay} 
+              onChangeText={setCalcDisplay} 
+              placeholder="0"
+            />
+            
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.', '+'].map((btn) => (
+                <TouchableOpacity 
+                  key={btn} 
+                  style={{ width: '22%', backgroundColor: C.bg, padding: 16, borderRadius: 12, alignItems: 'center' }}
+                  onPress={() => setCalcDisplay(prev => prev + btn)}
+                >
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={{ width: '48%', backgroundColor: '#fee2e2', padding: 16, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay('')}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#dc2626' }}>Clear (C)</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
