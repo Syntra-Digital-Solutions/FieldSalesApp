@@ -159,9 +159,9 @@ export default function App() {
           <Text style={styles.offlineText}>🔌 Offline Mode — Changes will sync when online</Text>
         </View>
       )}
-      {!user ? (
+        {!user ? (
         <LoginScreen onLogin={handleLoginSuccess} verifyOfflinePassword={verifyOfflinePassword} />
-      ) : user.role === 'manager' || user.role === 'Manager' ? (
+      ) : (String(user.role).toLowerCase() === 'manager' || String(user.role).toLowerCase() === 'admin') ? (
         <ManagerDashboard user={user} onLogout={handleLogout} />
       ) : (
         <AgentDashboard user={user} onLogout={handleLogout} />
