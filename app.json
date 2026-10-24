@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "FieldSales",
+    "slug": "fieldsalesapp",
+    "version": "1.0.1",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "com.divinedigitalforum.fieldsalesapp",
+      "versionCode": 5,
+      "softwareKeyboardLayoutMode": "pan",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0b1e5c"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self' data: gap: https://ssl.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.assemblyai.com; media-src 'self' blob: data: https://*.supabase.co; img-src 'self' data: https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+      }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow FieldSalesApp to use your location so your sales can be tagged with where they happened."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow FieldSalesApp to access your photos to attach existing documents.",
+          "cameraPermission": "Allow FieldSalesApp to use your camera to capture documents."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow FieldSalesApp to use your camera to scan product barcodes."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1ddda754-ebf2-4d84-8df7-072e3aa45884"
+      }
+    }
+  }
+}
