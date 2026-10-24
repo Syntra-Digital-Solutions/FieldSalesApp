@@ -78,7 +78,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (userId) => {
+    const loadProfile = async (userId) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -86,15 +86,25 @@ export default function App() {
         .eq('id', userId)
         .single();
 
-      if (error) {
-        const cached = await AsyncStorage.getItem(USER_CACHE_KEY);
-        if (cached) setUser(JSON.parse(cached));
-      } else if (data) {
-        const finalUser = { id: userId, name: data.full_name, role: data.role, phone: data.phone_number };
+      if (error) throw error;
+
+      if (data) {
+        // Force the role to be a clean, lowercase string (e.g. 'agent' or 'manager')
+        const cleanRole = String(data.role || 'agent').trim().toLowerCase();
+        
+        const finalUser = { 
+          id: userId, 
+          name: data.full_name, 
+          role: cleanRole, 
+          phone: data.phone_number 
+        };
+        
         setUser(finalUser);
         await AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(finalUser));
       }
     } catch (err) {
+      console.log('Error loading profile:', err);
+      // Only fall back to cache if we are truly offline
       const cached = await AsyncStorage.getItem(USER_CACHE_KEY);
       if (cached) setUser(JSON.parse(cached));
     }
@@ -140,6 +150,16 @@ export default function App() {
     } catch (e) {
       console.log('Supabase logout error (ignored):', e.message);
     }
+    
+    // 🚨 THE FIX: Wipe the cache so the next person who logs in starts fresh!
+    try {
+      await AsyncStorage.removeItem(USER_CACHE_KEY);
+      await AsyncStorage.removeItem(PASS_HASH_KEY);
+      await AsyncStorage.clear(); // Clears everything (agent dashboard cache too)
+    } catch (e) {
+      console.log('Failed to clear cache on logout:', e);
+    }
+
     setUser(null);
   };
 

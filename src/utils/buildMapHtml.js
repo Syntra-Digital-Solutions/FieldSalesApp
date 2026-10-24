@@ -76,10 +76,11 @@ export function buildMapHtml(filteredSales) {
         // Center of Ghana initially
         const map = L.map('map', { zoomControl: false }).setView([7.9465, -1.0232], 7);
         
-          // 🗺️ Use the OpenStreetMap style
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-          maxZoom: 20
+               // 🗺️ Use CARTO Voyager style (Includes all Town & City names, no blocking)
+                // 🗺️ Use Esri World Street Map (Free, no API key, shows all town names)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'Tiles &copy; Esri',
+          maxZoom: 19
         }).addTo(map);
 
         // Move zoom controls to bottom right

@@ -19,7 +19,6 @@ import TrainingQuizModal from './TrainingQuizModal';
 import { registerForPushAndSave } from '../src/utils/notifications';
 import LessonsModal from './LessonsModal';
 import AISupportModal from './AISupportModal';
-import { KeyboardAvoidingView, Platform as RNPlatform } from 'react-native';
 
 import { useTheme } from '../src/theme/ThemeContext';
 import { useLanguage } from '../src/i18n/LanguageContext';
