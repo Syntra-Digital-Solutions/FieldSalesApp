@@ -32,10 +32,10 @@ const AGENT_CACHE_KEY = '@agent_cache_v1';
 export default function AgentDashboard({ user, onLogout }) {
   const [paymentType, setPaymentType] = useState('cash');
   const [momoRef, setMomoRef] = useState('');
-    const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-
-      const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState('');
+
   const { theme } = useTheme();
   const { t } = useLanguage();
   const C = { ...theme, white: theme.card };
@@ -443,8 +443,8 @@ export default function AgentDashboard({ user, onLogout }) {
 
   const PeriodTabRow = ({ period, setPeriod }) => ( <View style={styles.periodRow}> {['day', 'month', 'year', 'all', 'custom'].map((p) => ( <TouchableOpacity key={p} style={[styles.periodChip, period === p && styles.periodChipActive]} onPress={() => setPeriod(p)}> <Text style={period === p ? styles.periodTextActive : styles.periodText}>{p === 'day' ? 'Today' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : p === 'all' ? 'All' : 'Custom'}</Text> </TouchableOpacity> ))} </View> );
 
-      const navItems = [ 
-            { key: 'calculator', label: '🧮 Quick Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
+  const navItems = [ 
+    { key: 'calculator', label: '🧮 Quick Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
     { key: 'ai', label: '✨ AI Assistant', color: C.gold || '#b8860b', onPress: () => setAiAssistantOpen(true) }, 
     { key: 'voicenotes', label: '🎙️ Voice Notes', color: C.green, onPress: () => setVoiceNotesOpen(true) }, 
     { key: 'lessons', label: '📖 Sales Playbook', color: C.green, onPress: () => setLessonsModalOpen(true) }, 
@@ -457,7 +457,8 @@ export default function AgentDashboard({ user, onLogout }) {
     { key: 'settings', label: '⚙️ Account Settings', color: C.sub, onPress: () => setPasswordModalOpen(true) }, 
     { key: 'help', label: '❓ How to Use', color: C.sub, onPress: () => setHelpGuideOpen(true) } 
   ];
-   const renderOverview = () => {
+
+  const renderOverview = () => {
     const todaySalesCount = mySales.filter((s) => isSameDay(new Date(s.created_at), new Date())).reduce((sum, s) => sum + s.items_sold, 0);
     const todayPacksSold = mySales.filter((s) => isSameDay(new Date(s.created_at), new Date())).reduce((sum, s) => sum + (s.pack_count || 0), 0);
     const stockPacksSummary = (() => { const map = {}; mySales.filter((s) => s.pack_count).forEach((s) => { const name = productName(s.product_id); if (!map[name]) map[name] = { productName: name, totalPacks: 0, totalUnits: 0 }; map[name].totalPacks += s.pack_count; map[name].totalUnits += s.items_sold; }); return Object.values(map); })();
@@ -491,7 +492,7 @@ export default function AgentDashboard({ user, onLogout }) {
           )}
         </View>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <View style={{ flex: 1, backgroundColor: C.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: 12, color: C.sub, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Units Sold</Text>
             <Text style={{ fontSize: 28, fontWeight: '800', color: C.ink, marginTop: 8 }}>{todaySalesCount}</Text>
@@ -502,7 +503,7 @@ export default function AgentDashboard({ user, onLogout }) {
           </View>
         </View>
         
-        {/*  NEW AGENT COMMISSION CARD */}
+        {/* 🚀 NEW AGENT COMMISSION CARD */}
         <View style={{ backgroundColor: '#f0fdf4', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#bbf7d0', marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
             <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Today's Commission</Text>
@@ -925,7 +926,7 @@ export default function AgentDashboard({ user, onLogout }) {
             </View>
             
             <TextInput 
-              style={[styles.input, { fontSize: 24, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20 }]} 
+              style={[styles.input, { fontSize: 24, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20, marginBottom: 10 }]} 
               keyboardType="numeric" 
               value={calcDisplay} 
               onChangeText={setCalcDisplay} 

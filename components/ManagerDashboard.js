@@ -39,7 +39,7 @@ export default function ManagerDashboard({ user, onLogout }) {
   const styles = getStyles(C);
   const [screen, setScreen] = useState('overview'); 
 
-  // 🧮 CALCULATOR STATE (Now in the correct place)
+  // 🧮 CALCULATOR STATE
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState('');
 
