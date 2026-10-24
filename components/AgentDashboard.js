@@ -19,6 +19,7 @@ import TrainingQuizModal from './TrainingQuizModal';
 import { registerForPushAndSave } from '../src/utils/notifications';
 import LessonsModal from './LessonsModal';
 import AISupportModal from './AISupportModal';
+import { KeyboardAvoidingView, Platform as RNPlatform } from 'react-native';
 
 import { useTheme } from '../src/theme/ThemeContext';
 import { useLanguage } from '../src/i18n/LanguageContext';
@@ -914,44 +915,91 @@ export default function AgentDashboard({ user, onLogout }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* QUICK CALCULATOR MODAL */}
+            {/* 🧮 ADVANCED CALCULATOR MODAL */}
       <Modal visible={calculatorOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 400, width: '90%' }]}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalBox, { maxWidth: 400, width: '95%' }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={styles.modalTitle}>🧮 Quick Calculator</Text>
+              <Text style={styles.modalTitle}>🧮 Business Calculator</Text>
               <TouchableOpacity onPress={() => setCalculatorOpen(false)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Close ✕</Text>
               </TouchableOpacity>
             </View>
             
             <TextInput 
-              style={[styles.input, { fontSize: 24, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20, marginBottom: 10 }]} 
-              keyboardType="numeric" 
+              style={[styles.input, { fontSize: 28, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20, marginBottom: 15 }]} 
+              keyboardType="default"
               value={calcDisplay} 
               onChangeText={setCalcDisplay} 
               placeholder="0"
             />
             
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.', '+'].map((btn) => (
-                <TouchableOpacity 
-                  key={btn} 
-                  style={{ width: '22%', backgroundColor: C.bg, padding: 16, borderRadius: 12, alignItems: 'center' }}
-                  onPress={() => setCalcDisplay(prev => prev + btn)}
-                >
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {/* ROW 1 */}
+              {['C', '(', ')', '÷'].map((btn) => (
+                <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: btn === 'C' ? '#fee2e2' : C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => {
+                  if (btn === 'C') setCalcDisplay('');
+                  else if (btn === '÷') setCalcDisplay(prev => prev + '/');
+                  else setCalcDisplay(prev => prev + btn);
+                }}>
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: btn === 'C' ? '#dc2626' : C.ink }}>{btn}</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* ROW 2 */}
+              {['7', '8', '9', '×'].map((btn) => (
+                <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => {
+                  if (btn === '×') setCalcDisplay(prev => prev + '*');
+                  else setCalcDisplay(prev => prev + btn);
+                }}>
                   <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={{ width: '48%', backgroundColor: '#fee2e2', padding: 16, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay('')}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#dc2626' }}>Clear (C)</Text>
+
+              {/* ROW 3 */}
+              {['4', '5', '6', '-'].map((btn) => (
+                <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + btn)}>
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* ROW 4 */}
+              {['1', '2', '3', '+'].map((btn) => (
+                <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + btn)}>
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* ROW 5 */}
+              <TouchableOpacity style={{ width: '48%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + '0')}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>0</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + '.')}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + '%')}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>%</Text>
+              </TouchableOpacity>
+
+              {/* EQUALS BUTTON */}
+              <TouchableOpacity 
+                style={{ width: '100%', backgroundColor: C.green, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 8 }} 
+                onPress={() => {
+                  try {
+                    const mathExpression = calcDisplay.replace(/×/g, '*').replace(/÷/g, '/').replace(/%/g, '/100');
+                    const result = eval(mathExpression);
+                    if (result === Infinity || isNaN(result)) throw new Error('Invalid');
+                    setCalcDisplay(String(result));
+                  } catch (e) {
+                    setCalcDisplay('Error');
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>= Equals</Text>
               </TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 12, color: C.sub, textAlign: 'center', marginTop: 12 }}>
-              Note: This is a basic text input. For advanced math (like 50 * 12), just type it in.
-            </Text>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <CustomerNoteModal visible={notesModalOpen} storeName={notesStore} userId={user.id} onClose={() => setNotesModalOpen(false)} />
       <AccountSettingsModal visible={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} currentPhone={user.phone} onUpdated={onLogout} />
