@@ -331,7 +331,11 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
     return () => { supabase.removeChannel(channel); };
   }, [fetchAll]);
 
-  useEffect(() => {
+   useEffect(() => {
+    // Web doesn't support expo-push-notifications without a VAPID key, 
+    // and we don't need push notifications on the browser dashboard.
+    if (Platform.OS === 'web') return;
+
     (async () => {
       try {
         const Notifications = await import('expo-notifications');

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Modal, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Modal, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { supabase } from '../src/config/supabaseClient';
 
 export default function AISupportModal({ visible, onClose, role = 'manager', userId }) {
@@ -21,7 +21,6 @@ export default function AISupportModal({ visible, onClose, role = 'manager', use
     setLoading(true);
 
     try {
-      // Send the role and userId to the edge function
       const { data, error } = await supabase.functions.invoke('ai-manager-assistant', {
         body: { prompt: userMsg, role: role, userId: userId }
       });
@@ -37,12 +36,14 @@ export default function AISupportModal({ visible, onClose, role = 'manager', use
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-<View style={{ backgroundColor: '#ffffff', width: '90%', maxWidth: 600, height: '85%', marginLeft: 'auto', marginRight: 'auto', borderRadius: 20, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 }}>
+      {/* We changed KeyboardAvoidingView to a standard View to fix the web centering bug */}
+      <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        
+        <View style={{ backgroundColor: '#ffffff', width: '95%', maxWidth: 600, height: '85%', borderRadius: 20, overflow: 'hidden', alignSelf: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 }}>
           
           {/* HEADER */}
           <View style={{ backgroundColor: '#0f172a', padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
+            <View style={{ flex: 1, paddingRight: 10 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#ffffff' }}>
                 ✨ AI {role === 'agent' ? 'Agent' : 'Manager'} Assistant
               </Text>
@@ -87,7 +88,7 @@ export default function AISupportModal({ visible, onClose, role = 'manager', use
           </View>
 
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

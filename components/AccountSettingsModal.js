@@ -70,7 +70,7 @@ export default function AccountSettingsModal({ visible, onClose, currentPhone, o
           
           {/* STICKY HEADER */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-            <View>
+            <View style={{ flex: 1, paddingRight: 10 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#0f172a' }}>⚙️ {t('account_settings') || 'Account Settings'}</Text>
               <Text style={{ fontSize: 13, color: '#64748b' }}>{t('fill_only_change') || 'Update your password or phone number.'}</Text>
             </View>
@@ -120,15 +120,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.5)', 
     justifyContent: 'center', 
     alignItems: 'center',
-    padding: 20,
+    padding: 20, 
   },
   modalBox: { 
     backgroundColor: '#ffffff', 
-    width: '90%', 
+    width: '100%', 
     maxWidth: 500, 
     maxHeight: '85%', 
     borderRadius: 20, 
     overflow: 'hidden',
+    alignSelf: 'center',
   },
   label: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginBottom: 6, marginTop: 12 },
   currentValue: { fontSize: 15, color: '#475569', fontWeight: '600', marginBottom: 8 },
