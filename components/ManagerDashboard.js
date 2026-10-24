@@ -2495,7 +2495,7 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
 
                 return (
                   <>
-                    {/* KPI CARDS */}
+                            {/* KPI CARDS */}
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
                       <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
                         <Text style={{ fontSize: 11, color: C.sub, fontWeight: '700', textTransform: 'uppercase' }}>Cash Collected</Text>
@@ -2504,6 +2504,13 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
                       <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
                         <Text style={{ fontSize: 11, color: C.sub, fontWeight: '700', textTransform: 'uppercase' }}>Units Sold</Text>
                         <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink, marginTop: 4 }}>{agentTotalUnits}</Text>
+                      </View>
+                      {/*  NEW PROFIT CARD */}
+                      <View style={{ flex: 1, backgroundColor: '#f0fdf4', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                        <Text style={{ fontSize: 11, color: '#166534', fontWeight: '700', textTransform: 'uppercase' }}>Net Profit</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#166534', marginTop: 4 }}>
+                          GHS {(agentTotalCash - agentSales.reduce((sum, s) => sum + Number(s.commission_earned || 0), 0)).toFixed(2)}
+                        </Text>
                       </View>
                     </View>
 

@@ -180,8 +180,16 @@ export default function AgentDashboard({ user, onLogout }) {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const fetchManagerPhone = useCallback(async () => { setManagerPhone('0535623106'); }, []);
 
-  const fetchAllData = useCallback(async () => {
+   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
+    
+    // 🛡️ CACHE GUARD: Clear old data if a different user logs in
+    const lastUserId = await AsyncStorage.getItem('@last_agent_id');
+    if (lastUserId !== user.id) {
+      await AsyncStorage.clear(); // Wipes out the old agent's data
+      await AsyncStorage.setItem('@last_agent_id', user.id);
+    }
+
     try {
       const [cSales, cIssues, cCounts, cRoutes, cProducts, cEdits, cTarget] = await Promise.all([
         loadCache('sales'), loadCache('issues'), loadCache('counts'),
@@ -480,7 +488,7 @@ export default function AgentDashboard({ user, onLogout }) {
           )}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <View style={{ flex: 1, backgroundColor: C.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: 12, color: C.sub, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Units Sold</Text>
             <Text style={{ fontSize: 28, fontWeight: '800', color: C.ink, marginTop: 8 }}>{todaySalesCount}</Text>
@@ -489,6 +497,17 @@ export default function AgentDashboard({ user, onLogout }) {
             <Text style={{ fontSize: 12, color: C.sub, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Cash Collected</Text>
             <Text style={{ fontSize: 24, fontWeight: '800', color: C.green, marginTop: 8 }}>GHS {totalCollectedToday.toFixed(2)}</Text>
           </View>
+        </View>
+        
+        {/*  NEW AGENT COMMISSION CARD */}
+        <View style={{ backgroundColor: '#f0fdf4', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#bbf7d0', marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Today's Commission</Text>
+            <Text style={{ fontSize: 13, color: '#166534', marginTop: 2 }}>Your earnings from today's sales</Text>
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#166534' }}>
+            GHS {mySales.filter((s) => isSameDay(new Date(s.created_at), new Date())).reduce((sum, s) => sum + Number(s.commission_earned || 0), 0).toFixed(2)}
+          </Text>
         </View>
 
         <View style={{ backgroundColor: C.card, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: C.border, marginBottom: 20 }}>
