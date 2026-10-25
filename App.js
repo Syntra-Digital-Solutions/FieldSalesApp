@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SafeAreaView, StatusBar, StyleSheet, ActivityIndicator, View, Text, Platform } from 'react-native';
+import { SafeAreaView, StatusBar, StyleSheet, ActivityIndicator, View, Text, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import * as Crypto from 'expo-crypto';
@@ -110,21 +110,39 @@ export default function App() {
     }
   };
 
-  // ✅ NEW: Save password hash on login
-  const handleLoginSuccess = async (loggedInUser, password) => {
-    setUser(loggedInUser);
+   const handleLoginSuccess = async (loggedInUser, password) => {
     try {
+      // 🔑 THE MISSING STEP — actually authenticate with Supabase
+      const email = `${loggedInUser.phone}@fieldsalesapp.local`;
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        console.log('❌ Supabase auth failed:', authError.message);
+        throw authError;
+      }
+
+      console.log('✅ Supabase session established for:', authData.user.id);
+
+      // Confirm session is really there
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('SESSION CHECK:', session ? 'YES ✅' : 'NO ❌');
+
+      setUser(loggedInUser);
       await AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(loggedInUser));
+
       if (password) {
         const hash = await Crypto.digestStringAsync(
           Crypto.CryptoDigestAlgorithm.SHA256,
           password
         );
         await AsyncStorage.setItem(PASS_HASH_KEY, hash);
-        console.log('✅ User + password hash saved to cache');
       }
     } catch (e) {
-      console.log('❌ Failed to save cache:', e);
+      console.log('❌ Login failed:', e.message);
+      Alert.alert('Login failed', e.message);
     }
   };
 

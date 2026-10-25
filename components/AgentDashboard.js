@@ -208,8 +208,16 @@ export default function AgentDashboard({ user, onLogout }) {
 
     try {
       await Promise.all([fetchRoutes(), fetchProducts(), fetchMySales(), fetchMyIssues(), fetchMyCounts(), fetchMyEditRequests(), fetchManagerPhone(), refreshPendingCount()]);
-      const { data: profileData } = await supabase.from('profiles').select('daily_target').eq('id', user.id).single();
-      if (profileData?.daily_target) { setDailyTarget(profileData.daily_target); await saveCache('target', profileData.daily_target); }
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('daily_target')
+        .eq('id', user.id)
+        .maybeSingle();
+        
+      if (!profileError && profileData?.daily_target) { 
+        setDailyTarget(profileData.daily_target); 
+        await saveCache('target', profileData.daily_target); 
+      }
       setLastSyncedAt(new Date());
     } catch (err) {
       console.log('Offline: using cached data');
@@ -351,37 +359,107 @@ export default function AgentDashboard({ user, onLogout }) {
   }));
 
   const addSaleItemLine = () => setSaleItems((prev) => [...prev, { product: products[0] || null, itemsSold: '', actualCash: '', isPack: false, packCount: '', unitsPerPack: '', leftoverUnits: '' }]);
-  const removeSaleItemLine = (index) => setSaleItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+    const removeSaleItemLine = (index) => setSaleItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
 
   const submitSale = async () => {
-    if (!storeInput.trim()) { Alert.alert('Error', 'Enter the store or customer name.'); return; }
+    if (!storeInput.trim()) { 
+      Alert.alert('Error', 'Enter the store or customer name.'); 
+      return; 
+    }
+
+    if (!products || products.length === 0) {
+      Alert.alert('Products not loaded', 'Please wait for the product list to load, then try again.');
+      return;
+    }
+
     const validItems = saleItems.filter((item) => {
       if (!item.product || !item.itemsSold || parseInt(item.itemsSold, 10) <= 0) return false;
       if (paymentType === 'credit') return true;
       return item.actualCash !== '' && !isNaN(parseFloat(item.actualCash));
     });
-    if (validItems.length === 0) { Alert.alert('Error', 'Fill in at least one item.'); return; }
+
+    if (validItems.length === 0) { 
+      Alert.alert('Wait!', 'Please check the fields.\n\nStore: ' + (storeInput ? '✅' : '❌') + '\nItems: ' + (saleItems[0].itemsSold ? '✅' : '❌') + '\nCash: ' + (saleItems[0].actualCash ? '✅' : '❌')); 
+      return; 
+    }
+
+    const showError = (msg) => {
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Error', msg);
+      }
+    };
+
     for (const item of validItems) {
-      const sold = parseInt(item.itemsSold, 10); const cash = parseFloat(item.actualCash);
+      const sold = parseInt(item.itemsSold, 10); 
+      const cash = parseFloat(item.actualCash);
       const expectedCash = sold * item.product.unit_price;
-      const payload = { worker_id: user.id, product_id: item.product.id, items_sold: sold, expected_cash: expectedCash, actual_cash: paymentType === 'credit' ? 0 : cash, payment_type: paymentType, momo_ref: paymentType === 'momo' ? momoRef.trim() : null, commission_earned: 0, store_name: storeInput.trim(), latitude: location?.coords?.latitude || null, longitude: location?.coords?.longitude || null, location_label: locationInput.trim() || null, pack_count: item.isPack ? parseInt(item.packCount, 10) || null : null, units_per_pack: item.isPack ? parseInt(item.unitsPerPack, 10) || null : null };
-      const result = await saveSaleOffline(payload);
-      if (!result.success) { Alert.alert('Error', `Could not save ${item.product.name} locally.`); return; }
+      
+      const payload = { 
+        worker_id: user.id, 
+        product_id: item.product.id, 
+        items_sold: sold, 
+        expected_cash: expectedCash, 
+        actual_cash: paymentType === 'credit' ? 0 : cash, 
+        payment_type: paymentType, 
+        momo_ref: paymentType === 'momo' ? momoRef.trim() : null, 
+        commission_earned: 0, 
+        store_name: storeInput.trim(), 
+        latitude: location?.coords?.latitude || null, 
+        longitude: location?.coords?.longitude || null, 
+        location_label: locationInput.trim() || null, 
+        pack_count: item.isPack ? parseInt(item.packCount, 10) || null : null, 
+        units_per_pack: item.isPack ? parseInt(item.unitsPerPack, 10) || null : null 
+      };
+      
+      if (Platform.OS !== 'web') {
+        try {
+          const result = await saveSaleOffline(payload);
+          if (!result.success) { 
+            showError(`Could not save ${item.product.name} locally.`); 
+            return; 
+          }
+        } catch (e) {
+          console.log('Offline save failed, proceeding to Supabase:', e.message);
+        }
+      }
+      
       try {
         const { data: insertedSale, error } = await supabase.from('sales').insert([payload]).select().single();
-        if (!error && insertedSale) await supabase.from('sale_alerts').insert([{ sale_id: insertedSale.id, agent_id: user.id }]);
-      } catch {}
+        if (error) {
+          showError('Database error: ' + error.message + ' (code: ' + error.code + ')');
+          return;
+        }
+        if (insertedSale) {
+          try {
+            await supabase.from('sales_alerts').insert([{ sale_id: insertedSale.id, agent_id: user.id }]);
+          } catch (e) {
+            console.log('sale_alerts insert failed (non-fatal):', e.message);
+          }
+        }
+      } catch (err) {
+        showError('Network error: ' + err.message);
+        return;
+      }
     }
+
     if (linkedRouteId) {
       try { await supabase.from('routes').update({ status: 'Checked In' }).eq('id', linkedRouteId); } catch {}
       setRoutes((prev) => prev.map((r) => (r.id === linkedRouteId ? { ...r, status: 'Checked In' } : r)));
     }
+    
+    if (Platform.OS === 'web') {
+      window.alert(`Saved — ${validItems.length} item(s) recorded at ${storeInput}.`);
+    } else {
       Alert.alert('Saved', `${validItems.length} item(s) recorded at ${storeInput}.`);
+    }
     setSaleModalOpen(false); 
     refreshPendingCount(); 
     
     const soldBefore = mySales.filter((s) => isSameDay(new Date(s.created_at), new Date())).reduce((sum, s) => sum + s.items_sold, 0);
     const justSold = validItems.reduce((sum, i) => sum + parseInt(i.itemsSold, 10), 0);
+    
     if (soldBefore < dailyTarget && (soldBefore + justSold) >= dailyTarget) {
       setShowCelebration(true);
     }
@@ -441,7 +519,21 @@ export default function AgentDashboard({ user, onLogout }) {
   const handleSaveMyPDF = async () => { await generateAndSharePDF(buildMyReportHTML(), `${user.name}_${periodLabel()}_report`); };
   const myReportShareText = `${user.name}'s ${periodLabel()} report:\n${historyTotals.sold} units sold, GHS ${historyTotals.cash.toFixed(2)} collected.`;
 
-  const PeriodTabRow = ({ period, setPeriod }) => ( <View style={styles.periodRow}> {['day', 'month', 'year', 'all', 'custom'].map((p) => ( <TouchableOpacity key={p} style={[styles.periodChip, period === p && styles.periodChipActive]} onPress={() => setPeriod(p)}> <Text style={period === p ? styles.periodTextActive : styles.periodText}>{p === 'day' ? 'Today' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : p === 'all' ? 'All' : 'Custom'}</Text> </TouchableOpacity> ))} </View> );
+const PeriodTabRow = ({ period, setPeriod }) => (
+  <View style={styles.periodRow}>
+    {['day', 'month', 'year', 'all', 'custom'].map((p) => (
+      <TouchableOpacity
+        key={p}
+        style={[styles.periodChip, period === p && styles.periodChipActive]}
+        onPress={() => setPeriod(p)}
+      >
+        <Text style={period === p ? styles.periodTextActive : styles.periodText}>
+          {p === 'day' ? 'Today' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : p === 'all' ? 'All' : 'Custom'}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
 
   const navItems = [ 
     { key: 'calculator', label: '🧮 Quick Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
@@ -562,12 +654,15 @@ export default function AgentDashboard({ user, onLogout }) {
           <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '800' }}>🛍️ Log a Sale</Text>
         </TouchableOpacity>
 
+                {/* QUICK ACTIONS */}
         {mySales.length > 0 && (
           <TouchableOpacity style={{ backgroundColor: C.card, borderWidth: 2, borderColor: C.green, paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginBottom: 12 }} onPress={repeatLastSale}>
             <Text style={{ color: C.green, fontSize: 16, fontWeight: '800' }}>🔁 Repeat Last Sale</Text>
-                    {/* QUICK SALE TILES */}
+          </TouchableOpacity>
+        )}
+
+        {/* QUICK SALE TILES */}
         {mySales.length > 0 && (() => {
-          // Find the 3 most recent unique product+store combinations
           const uniqueSales = [];
           const seen = new Set();
           for (const sale of mySales) {
@@ -586,15 +681,14 @@ export default function AgentDashboard({ user, onLogout }) {
               <Text style={{ fontSize: 14, color: C.sub, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>⚡ Quick Sale (1-Tap)</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {uniqueSales.map((sale) => {
-                  const prod = products.find(p => p.id === sale.product_id);
-                  return (
+  const prod = products.find(p => p.id === sale.product_id);
+  if (!prod) return null;
+  return (
                     <TouchableOpacity 
                       key={sale.id} 
                       style={{ flex: 1, minWidth: '45%', backgroundColor: C.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.border }}
                       onPress={async () => {
                         if (!prod) return Alert.alert('Error', 'Product no longer active');
-                        
-                        // Pre-fill the sale modal
                         setStoreInput(sale.store_name || '');
                         setLocationInput(locationLabel || '');
                         setPaymentType('cash');
@@ -620,13 +714,11 @@ export default function AgentDashboard({ user, onLogout }) {
                       </View>
                     </TouchableOpacity>
                   );
-                })}
+                     })}
               </View>
             </View>
           );
         })()}
-          </TouchableOpacity>
-        )}
 
         {managerPhone && (
           <TouchableOpacity style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border, paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginBottom: 20 }} onPress={callManager}>
@@ -808,12 +900,11 @@ export default function AgentDashboard({ user, onLogout }) {
     </ScrollView>
   );
 
-  const modals = (
+    const modals = (
     <>
-        <Modal visible={saleModalOpen} transparent animationType="fade">
+      <Modal visible={saleModalOpen} transparent animationType="fade">
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.modalBox, { maxWidth: 500, width: '95%', maxHeight: '90%', padding: 0, overflow: 'hidden' }]}>
-            
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: C.ink }}>{t('log_sale_title')}</Text>
               <TouchableOpacity onPress={() => setSaleModalOpen(false)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
@@ -821,49 +912,65 @@ export default function AgentDashboard({ user, onLogout }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ padding: 20 }}>
-            <Text style={styles.label}>{t('store_customer_name')}</Text>
-            <TextInput style={styles.input} value={storeInput} onChangeText={setStoreInput} placeholder="e.g. Kejetia Market Stall 4" placeholderTextColor="#64748b" />
-            <Text style={styles.label}>{t('location_label')}</Text>
-            <TextInput style={styles.input} value={locationInput} onChangeText={setLocationInput} placeholder="Town, area, or landmark" placeholderTextColor="#64748b" />
-            <TouchableOpacity onPress={requestLocation} disabled={locatingNow}><Text style={styles.useLocationText}>{locatingNow ? 'Locating...' : t('use_current_location')}</Text></TouchableOpacity>
-            <Text style={[styles.label, { marginTop: 12 }]}>{t('how_paid')}</Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity onPress={() => setPaymentType('cash')} style={[styles.paymentChip, paymentType === 'cash' && styles.paymentChipActive]}><Text style={paymentType === 'cash' ? styles.paymentChipTextActive : styles.paymentChipText}>💵 {t('cash')}</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => setPaymentType('momo')} style={[styles.paymentChip, paymentType === 'momo' && styles.paymentChipActive]}><Text style={paymentType === 'momo' ? styles.paymentChipTextActive : styles.paymentChipText}>📱 {t('momo')}</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => setPaymentType('credit')} style={[styles.paymentChip, paymentType === 'credit' && styles.paymentChipActive]}><Text style={paymentType === 'credit' ? styles.paymentChipTextActive : styles.paymentChipText}>🧾 {t('credit')}</Text></TouchableOpacity>
-            </View>
-            {paymentType === 'credit' && (<Text style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Goods given, payment still owed.</Text>)}
-            {paymentType === 'momo' && (<TextInput style={styles.input} value={momoRef} onChangeText={setMomoRef} placeholder="MoMo transaction ref (optional)" placeholderTextColor="#64748b" />)}
-            <Text style={[styles.label, { marginTop: 12 }]}>{t('items_sold_today')}</Text>
-            <KeyboardAwareScrollView style={{ maxHeight: 280 }} enableOnAndroid extraScrollHeight={80}>
-              {saleItems.map((item, index) => (
-                <View key={index} style={styles.saleItemBlock}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Text style={styles.saleItemLabel}>{t('item_n')(index + 1)}</Text>{saleItems.length > 1 && <TouchableOpacity onPress={() => removeSaleItemLine(index)}><Text style={styles.removeItemText}>{t('remove')}</Text></TouchableOpacity>}</View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipRow, { flex: 1 }]}>{products.map((p) => (<TouchableOpacity key={p.id} style={[styles.chip, item.product?.id === p.id && styles.chipActive]} onPress={() => updateSaleItem(index, 'product', p)}><Text style={item.product?.id === p.id ? styles.chipTextActive : styles.chipText}>{p.name}</Text></TouchableOpacity>))}</ScrollView>
-                    <TouchableOpacity onPress={() => { setScanTarget({ type: 'saleItem', index }); setScannerOpen(true); }} style={styles.scanBtn}><Text style={styles.scanBtnText}>📷</Text></TouchableOpacity>
+            <ScrollView style={{ padding: 20 }} contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+              <Text style={styles.label}>{t('store_customer_name')}</Text>
+              <TextInput style={styles.input} value={storeInput} onChangeText={setStoreInput} placeholder="e.g. Kejetia Market Stall 4" placeholderTextColor="#64748b" />
+              <Text style={styles.label}>{t('location_label')}</Text>
+              <TextInput style={styles.input} value={locationInput} onChangeText={setLocationInput} placeholder="Town, area, or landmark" placeholderTextColor="#64748b" />
+              <TouchableOpacity onPress={requestLocation} disabled={locatingNow}><Text style={styles.useLocationText}>{locatingNow ? 'Locating...' : t('use_current_location')}</Text></TouchableOpacity>
+              <Text style={[styles.label, { marginTop: 12 }]}>{t('how_paid')}</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity onPress={() => setPaymentType('cash')} style={[styles.paymentChip, paymentType === 'cash' && styles.paymentChipActive]}><Text style={paymentType === 'cash' ? styles.paymentChipTextActive : styles.paymentChipText}>💵 {t('cash')}</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setPaymentType('momo')} style={[styles.paymentChip, paymentType === 'momo' && styles.paymentChipActive]}><Text style={paymentType === 'momo' ? styles.paymentChipTextActive : styles.paymentChipText}>📱 {t('momo')}</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setPaymentType('credit')} style={[styles.paymentChip, paymentType === 'credit' && styles.paymentChipActive]}><Text style={paymentType === 'credit' ? styles.paymentChipTextActive : styles.paymentChipText}>🧾 {t('credit')}</Text></TouchableOpacity>
+              </View>
+              {paymentType === 'credit' && (<Text style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Goods given, payment still owed.</Text>)}
+              {paymentType === 'momo' && (<TextInput style={styles.input} value={momoRef} onChangeText={setMomoRef} placeholder="MoMo transaction ref (optional)" placeholderTextColor="#64748b" />)}
+              <Text style={[styles.label, { marginTop: 12 }]}>{t('items_sold_today')}</Text>
+              <KeyboardAwareScrollView style={{ maxHeight: 280 }} enableOnAndroid extraScrollHeight={80} keyboardShouldPersistTaps="handled" nestedScrollEnabled={true}>
+                {saleItems.map((item, index) => (
+                  <View key={index} style={styles.saleItemBlock}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.saleItemLabel}>{t('item_n')(index + 1)}</Text>
+                      {saleItems.length > 1 && <TouchableOpacity onPress={() => removeSaleItemLine(index)}><Text style={styles.removeItemText}>{t('remove')}</Text></TouchableOpacity>}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipRow, { flex: 1 }]}>
+                        {products.map((p) => (
+                          <TouchableOpacity key={p.id} style={[styles.chip, item.product?.id === p.id && styles.chipActive]} onPress={() => updateSaleItem(index, 'product', p)}>
+                            <Text style={item.product?.id === p.id ? styles.chipTextActive : styles.chipText}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                      <TouchableOpacity onPress={() => { setScanTarget({ type: 'saleItem', index }); setScannerOpen(true); }} style={styles.scanBtn}><Text style={styles.scanBtnText}>📷</Text></TouchableOpacity>
+                    </View>
+                    {item.product && <Text style={styles.priceHint}>GHS {item.product.unit_price} each · {(item.product.commission_rate * 100).toFixed(0)}% commission</Text>}
+                    <Text style={styles.label}>Items sold</Text>
+                    <TouchableOpacity onPress={() => updateSaleItem(index, 'isPack', !item.isPack)} style={styles.packToggle}><Text style={styles.packToggleText}>{item.isPack ? '☑' : '☐'} {t('sold_as_packs')}</Text></TouchableOpacity>
+                    {item.isPack ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        <TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.packCount} onChangeText={(v) => updateSaleItem(index, 'packCount', v)} placeholder={t('full_packs')} placeholderTextColor="#64748b" />
+                        <TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.unitsPerPack} onChangeText={(v) => updateSaleItem(index, 'unitsPerPack', v)} placeholder={t('units_per_pack')} placeholderTextColor="#64748b" />
+                        <TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.leftoverUnits} onChangeText={(v) => updateSaleItem(index, 'leftoverUnits', v)} placeholder={t('leftover_units')} placeholderTextColor="#64748b" />
+                      </View>
+                    ) : null}
+                    <TextInput style={styles.input} keyboardType="numeric" value={item.itemsSold} onChangeText={(v) => updateSaleItem(index, 'itemsSold', v)} placeholder={item.isPack ? 'Total units (auto-filled)' : '0'} placeholderTextColor="#64748b" />
+                    <Text style={styles.label}>{t('cash_collected')}</Text>
+                    <TextInput style={styles.input} keyboardType="numeric" value={item.actualCash} onChangeText={(v) => updateSaleItem(index, 'actualCash', v)} placeholder="0.00" placeholderTextColor="#64748b" />
                   </View>
-                  {item.product && <Text style={styles.priceHint}>GHS {item.product.unit_price} each · {(item.product.commission_rate * 100).toFixed(0)}% commission</Text>}
-                  <Text style={styles.label}>Items sold</Text>
-                  <TouchableOpacity onPress={() => updateSaleItem(index, 'isPack', !item.isPack)} style={styles.packToggle}><Text style={styles.packToggleText}>{item.isPack ? '☑' : '☐'} {t('sold_as_packs')}</Text></TouchableOpacity>
-                  {item.isPack ? (<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.packCount} onChangeText={(v) => updateSaleItem(index, 'packCount', v)} placeholder={t('full_packs')} placeholderTextColor="#64748b" /><TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.unitsPerPack} onChangeText={(v) => updateSaleItem(index, 'unitsPerPack', v)} placeholder={t('units_per_pack')} placeholderTextColor="#64748b" /><TextInput style={[styles.input, { minWidth: 90, flexGrow: 1 }]} keyboardType="numeric" value={item.leftoverUnits} onChangeText={(v) => updateSaleItem(index, 'leftoverUnits', v)} placeholder={t('leftover_units')} placeholderTextColor="#64748b" /></View>) : null}
-                  <TextInput style={styles.input} keyboardType="numeric" value={item.itemsSold} onChangeText={(v) => updateSaleItem(index, 'itemsSold', v)} placeholder={item.isPack ? 'Total units (auto-filled)' : '0'} placeholderTextColor="#64748b" />
-                  <Text style={styles.label}>{t('cash_collected')}</Text>
-                  <TextInput style={styles.input} keyboardType="numeric" value={item.actualCash} onChangeText={(v) => updateSaleItem(index, 'actualCash', v)} placeholder="0.00" placeholderTextColor="#64748b" />
-                </View>
-              ))}
-            </KeyboardAwareScrollView>
-                 <TouchableOpacity onPress={addSaleItemLine} style={[styles.addItemBtn, { marginTop: 16 }]}><Text style={styles.addItemBtnText}>{t('add_another_item')}</Text></TouchableOpacity>
-            
-            <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#0b6b43', paddingVertical: 16, borderRadius: 12, marginTop: 20 }]} onPress={submitSale}>
-              <Text style={[styles.submitText, { fontSize: 18 }]}>{t('submit')}</Text>
-            </TouchableOpacity>
+                ))}
+              </KeyboardAwareScrollView>
+              <TouchableOpacity onPress={addSaleItemLine} style={[styles.addItemBtn, { marginTop: 16 }]}><Text style={styles.addItemBtnText}>{t('add_another_item')}</Text></TouchableOpacity>
+
+                <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#0b6b43', paddingVertical: 16, borderRadius: 12, marginTop: 20 }]} onPress={submitSale}>
+                <Text style={[styles.submitText, { fontSize: 18 }]}>{t('submit')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setSaleModalOpen(false)} style={{ marginTop: 16, alignItems: 'center', paddingBottom: 20 }}>
+                <Text style={[styles.cancelText, { fontSize: 15, fontWeight: '600' }]}>{t('cancel')}</Text>
+              </TouchableOpacity>
             </ScrollView>
-            <TouchableOpacity onPress={() => setSaleModalOpen(false)} style={{ marginTop: 16, alignItems: 'center', paddingBottom: 20 }}>
-              <Text style={[styles.cancelText, { fontSize: 15, fontWeight: '600' }]}>{t('cancel')}</Text>
-            </TouchableOpacity>
-        </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -886,7 +993,13 @@ export default function AgentDashboard({ user, onLogout }) {
             <Text style={styles.modalTitle}>Log Items Collected</Text>
             <Text style={styles.label}>Product</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipRow, { flex: 1 }]}>{products.map((p) => (<TouchableOpacity key={p.id} style={[styles.chip, collectProduct?.id === p.id && styles.chipActive]} onPress={() => setCollectProduct(p)}><Text style={collectProduct?.id === p.id ? styles.chipTextActive : styles.chipText}>{p.name}</Text></TouchableOpacity>))}</ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipRow, { flex: 1 }]}>
+                {products.map((p) => (
+                  <TouchableOpacity key={p.id} style={[styles.chip, collectProduct?.id === p.id && styles.chipActive]} onPress={() => setCollectProduct(p)}>
+                    <Text style={collectProduct?.id === p.id ? styles.chipTextActive : styles.chipText}>{p.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <TouchableOpacity onPress={() => { setScanTarget({ type: 'collect' }); setScannerOpen(true); }} style={styles.scanBtn}><Text style={styles.scanBtnText}>📷</Text></TouchableOpacity>
             </View>
             <Text style={styles.label}>Quantity collected</Text>
@@ -906,7 +1019,13 @@ export default function AgentDashboard({ user, onLogout }) {
             <Text style={styles.label}>New cash collected (GHS)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={newActualCash} onChangeText={setNewActualCash} placeholderTextColor="#64748b" />
             <Text style={styles.label}>Reason for this change</Text>
-            <View style={styles.reasonChipWrap}>{editReasonOptions.map((option) => (<TouchableOpacity key={option} style={[styles.reasonChip, selectedReasonChip === option && styles.reasonChipActive]} onPress={() => selectReasonChip(option)}><Text style={selectedReasonChip === option ? styles.reasonChipTextActive : styles.reasonChipText}>{option}</Text></TouchableOpacity>))}</View>
+            <View style={styles.reasonChipWrap}>
+              {editReasonOptions.map((option) => (
+                <TouchableOpacity key={option} style={[styles.reasonChip, selectedReasonChip === option && styles.reasonChipActive]} onPress={() => selectReasonChip(option)}>
+                  <Text style={selectedReasonChip === option ? styles.reasonChipTextActive : styles.reasonChipText}>{option}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             {selectedReasonChip === 'Other' && (<TextInput style={[styles.input, { height: 70, marginTop: 8 }]} multiline value={editReason} onChangeText={setEditReason} placeholder="Type the reason..." placeholderTextColor="#64748b" />)}
             <TouchableOpacity style={styles.submitBtn} onPress={submitEditRequest}><Text style={styles.submitText}>Send Request</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => setEditingSale(null)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
@@ -914,7 +1033,6 @@ export default function AgentDashboard({ user, onLogout }) {
         </KeyboardAvoidingView>
       </Modal>
 
-            {/* 🧮 ADVANCED CALCULATOR MODAL */}
       <Modal visible={calculatorOpen} transparent animationType="fade">
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.modalBox, { maxWidth: 400, width: '95%' }]}>
@@ -924,17 +1042,8 @@ export default function AgentDashboard({ user, onLogout }) {
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Close ✕</Text>
               </TouchableOpacity>
             </View>
-            
-            <TextInput 
-              style={[styles.input, { fontSize: 28, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20, marginBottom: 15 }]} 
-              keyboardType="default"
-              value={calcDisplay} 
-              onChangeText={setCalcDisplay} 
-              placeholder="0"
-            />
-            
+            <TextInput style={[styles.input, { fontSize: 28, textAlign: 'right', fontWeight: '800', color: C.green, paddingVertical: 20, marginBottom: 15 }]} keyboardType="default" value={calcDisplay} onChangeText={setCalcDisplay} placeholder="0" />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-              {/* ROW 1 */}
               {['C', '(', ')', '÷'].map((btn) => (
                 <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: btn === 'C' ? '#fee2e2' : C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => {
                   if (btn === 'C') setCalcDisplay('');
@@ -944,8 +1053,6 @@ export default function AgentDashboard({ user, onLogout }) {
                   <Text style={{ fontSize: 20, fontWeight: '700', color: btn === 'C' ? '#dc2626' : C.ink }}>{btn}</Text>
                 </TouchableOpacity>
               ))}
-
-              {/* ROW 2 */}
               {['7', '8', '9', '×'].map((btn) => (
                 <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => {
                   if (btn === '×') setCalcDisplay(prev => prev + '*');
@@ -954,22 +1061,16 @@ export default function AgentDashboard({ user, onLogout }) {
                   <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
                 </TouchableOpacity>
               ))}
-
-              {/* ROW 3 */}
               {['4', '5', '6', '-'].map((btn) => (
                 <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + btn)}>
                   <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
                 </TouchableOpacity>
               ))}
-
-              {/* ROW 4 */}
               {['1', '2', '3', '+'].map((btn) => (
                 <TouchableOpacity key={btn} style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + btn)}>
                   <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>{btn}</Text>
                 </TouchableOpacity>
               ))}
-
-              {/* ROW 5 */}
               <TouchableOpacity style={{ width: '48%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + '0')}>
                 <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>0</Text>
               </TouchableOpacity>
@@ -979,41 +1080,32 @@ export default function AgentDashboard({ user, onLogout }) {
               <TouchableOpacity style={{ width: '23%', backgroundColor: C.bg, padding: 18, borderRadius: 12, alignItems: 'center' }} onPress={() => setCalcDisplay(prev => prev + '%')}>
                 <Text style={{ fontSize: 20, fontWeight: '700', color: C.ink }}>%</Text>
               </TouchableOpacity>
-
-              {/* EQUALS BUTTON */}
-              <TouchableOpacity 
-                style={{ width: '100%', backgroundColor: C.green, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 8 }} 
-                onPress={() => {
-                  try {
-                    const mathExpression = calcDisplay.replace(/×/g, '*').replace(/÷/g, '/').replace(/%/g, '/100');
-                    const result = eval(mathExpression);
-                    if (result === Infinity || isNaN(result)) throw new Error('Invalid');
-                    setCalcDisplay(String(result));
-                  } catch (e) {
-                    setCalcDisplay('Error');
-                  }
-                }}
-              >
+              <TouchableOpacity style={{ width: '100%', backgroundColor: C.green, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 8 }} onPress={() => {
+                try {
+                  const mathExpression = calcDisplay.replace(/×/g, '*').replace(/÷/g, '/').replace(/%/g, '/100');
+                  const result = eval(mathExpression);
+                  if (result === Infinity || isNaN(result)) throw new Error('Invalid');
+                  setCalcDisplay(String(result));
+                } catch (e) {
+                  setCalcDisplay('Error');
+                }
+              }}>
                 <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>= Equals</Text>
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
       <CustomerNoteModal visible={notesModalOpen} storeName={notesStore} userId={user.id} onClose={() => setNotesModalOpen(false)} />
       <AccountSettingsModal visible={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} currentPhone={user.phone} onUpdated={onLogout} />
       <BarcodeScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} products={products} onScanned={(product) => { if (scanTarget?.type === 'saleItem') updateSaleItem(scanTarget.index, 'product', product); else if (scanTarget?.type === 'collect') setCollectProduct(product); }} />
       <HelpGuideModal visible={helpGuideOpen} onClose={() => setHelpGuideOpen(false)} role="agent" />
-         <AISupportModal 
-  visible={aiAssistantOpen} 
-  onClose={() => setAiAssistantOpen(false)} 
-  role="agent" 
-  userId={user.id} 
-/>
-    </>
+      <AISupportModal visible={aiAssistantOpen} onClose={() => setAiAssistantOpen(false)} role="agent" userId={user.id} />
+     </>
   );
 
-    return (
+  return (
     <View style={styles.appRow}>
       
       <Modal visible={showCelebration} transparent animationType="fade">

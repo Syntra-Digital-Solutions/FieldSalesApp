@@ -102,8 +102,17 @@ export function buildMapHtml(filteredSales) {
         });
         
         if (group.length > 0) {
-          const bounds = L.featureGroup(group).getBounds();
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+          if (markers.length === 1) {
+            // If there's only 1 sale, lock directly onto it at street level
+            map.setView([markers[0].lat, markers[0].lng], 15);
+          } else {
+            // If there are multiple sales, fit them all on screen (with a closer max zoom)
+            const bounds = L.featureGroup(group).getBounds();
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+          }
+        } else {
+          // If no sales yet, default to Yamfo (Ahafo Region)
+          map.setView([7.1234, -2.3456], 13); 
         }
       </script>
     </body>
