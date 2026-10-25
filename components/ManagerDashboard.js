@@ -48,6 +48,8 @@ export default function ManagerDashboard({ user, onLogout }) {
   const [issues, setIssues] = useState([]);
   const [agents, setAgents] = useState([]);
   const [products, setProducts] = useState([]);
+  const [commissionEditProduct, setCommissionEditProduct] = useState(null);
+const [commissionRateInput, setCommissionRateInput] = useState('');
   const [stockSummary, setStockSummary] = useState([]);
   const [pendingEdits, setPendingEdits] = useState([]);
   const [managerTips, setManagerTips] = useState([]);
@@ -205,7 +207,7 @@ export default function ManagerDashboard({ user, onLogout }) {
       ] = await Promise.all([
         supabase.from('sales').select('id, worker_id, items_sold, actual_cash, expected_cash, commission_earned, store_name, product_id, location_label, latitude, longitude, archived, pack_count, units_per_pack, payment_type, momo_ref, created_at').order('created_at', { ascending: false }),
 supabase.from('profiles').select('id, full_name, status, compliance_info').eq('role', 'agent'),
-        supabase.from('products').select('id, name').eq('active', true),
+supabase.from('products').select('id, name, commission_rate').eq('active', true),
         supabase.from('agent_inventory').select('id, agent_id, product_id, quantity_issued, issued_at, source, archived, pack_count, units_per_pack').order('issued_at', { ascending: false }),
         supabase.from('edit_requests').select('id, sale_id, agent_id, new_items_sold, new_actual_cash, reason, status, created_at, resolved_at').order('created_at', { ascending: false }),
         supabase.from('manager_corrections').select('id, sale_id, old_items_sold, old_actual_cash, new_items_sold, new_actual_cash, note, created_at').order('created_at', { ascending: false }),
@@ -994,15 +996,83 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
     </View>
   );
 
-    const navItems = [
-    { key: 'calculator', label: '🧮 Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
-    { key: 'ai', label: '✨ AI Assistant', color: C.gold || '#b8860b', onPress: () => setAiAssistantOpen(true) },
-    { key: 'overview', label: '🏠 Overview', color: C.blue, badge: pendingEdits.length ? String(pendingEdits.length) : null, onPress: () => setScreen('overview') },
-    { key: 'agents', label: '👥 My Agents', color: C.blue, badge: unseenAlertCount ? String(unseenAlertCount) : null, onPress: () => setScreen('agents') },
-    { key: 'reports', label: '📊 Reports', color: C.green, onPress: () => setScreen('reports') },
-    { key: 'settings', label: '⚙️ Settings', color: C.sub, onPress: () => setPasswordModalOpen(true) },
-    { key: 'help', label: '❓ How to Use', color: C.sub, onPress: () => setHelpGuideOpen(true) },
-  ];
+     const navItems = [
+  { key: 'calculator', label: '🧮 Calculator', color: C.sub, onPress: () => setCalculatorOpen(true) },
+  { key: 'ai', label: '✨ AI Assistant', color: C.gold || '#b8860b', onPress: () => setAiAssistantOpen(true) },
+  { key: 'overview', label: '🏠 Overview', color: C.blue, badge: pendingEdits.length ? String(pendingEdits.length) : null, onPress: () => setScreen('overview') },
+  { key: 'agents', label: '👥 My Agents', color: C.blue, badge: unseenAlertCount ? String(unseenAlertCount) : null, onPress: () => setScreen('agents') },
+  { key: 'commission-rates', label: '💰 Commission Rates', color: C.green, onPress: () => setScreen('commission-rates') },
+  { key: 'reports', label: '📊 Reports', color: C.green, onPress: () => setScreen('reports') },
+  { key: 'settings', label: '⚙️ Settings', color: C.sub, onPress: () => setPasswordModalOpen(true) },
+  { key: 'help', label: '❓ How to Use', color: C.sub, onPress: () => setHelpGuideOpen(true) },
+];
+
+  const renderCommissionRates = () => (
+  <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 120 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+    <Text style={styles.pageTitle}>💰 Commission Rates</Text>
+    <Text style={styles.detail}>Set how much agents earn per sale, as a percentage of the cash value.</Text>
+
+    {products.map((p) => {
+      const rate = (p.commission_rate || 0) * 100;
+      return (
+        <View key={p.id} style={styles.row}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.rowTitle}>{p.name}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: C.green }}>{rate.toFixed(1)}%</Text>
+          </View>
+          <Text style={styles.detail}>Agents earn GHS {(rate * 0.01 * 30).toFixed(2)} on a GHS 30 sale</Text>
+          <TouchableOpacity 
+            style={{ marginTop: 8, backgroundColor: C.blueTint, padding: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+            onPress={() => { setCommissionEditProduct(p); setCommissionRateInput(String(rate)); }}
+          >
+            <Text style={{ color: C.blue, fontWeight: '700' }}>Edit Rate</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    })}
+
+    {/* EDIT MODAL */}
+    <Modal visible={!!commissionEditProduct} animationType="fade" transparent>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Edit Commission — {commissionEditProduct?.name}</Text>
+          <Text style={styles.label}>Commission rate (%)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={commissionRateInput}
+            onChangeText={setCommissionRateInput}
+            placeholder="e.g. 15"
+          />
+          <Text style={styles.detail}>Enter as a percentage (15 = 15%)</Text>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => setCommissionEditProduct(null)}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={async () => {
+                const pct = parseFloat(commissionRateInput);
+                if (isNaN(pct) || pct < 0 || pct > 100) {
+                  Alert.alert('Error', 'Enter a percentage between 0 and 100.');
+                  return;
+                }
+                const { error } = await supabase
+                  .from('products')
+                  .update({ commission_rate: pct / 100 })
+                  .eq('id', commissionEditProduct.id);
+                if (error) Alert.alert('Error', error.message);
+                else { setCommissionEditProduct(null); fetchAll(); Alert.alert('Saved', 'Commission rate updated.'); }
+              }}
+            >
+              <Text style={styles.primaryBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  </ScrollView>
+);
   const renderReports = () => (
     <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 120 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <Text style={styles.pageTitle}>Reports</Text>
@@ -1939,9 +2009,12 @@ supabase.from('profiles').select('id, full_name, status, compliance_info').eq('r
    return (
     <View style={styles.layout}>
       <Sidebar appName="FieldSales" greeting={`Hi, ${user?.name || 'Manager'}`} activeKey={screen} items={navItems} onLogout={onLogout} />
+      
+
 
       <View style={styles.mainContent}>
         {screen === 'overview' && renderOverview()}
+        {screen === 'commission-rates' && renderCommissionRates()}
         {screen === 'reports' && renderReports()}
         {screen === 'agents' && renderAgents()}
         {screen === 'activity' && renderActivity()}

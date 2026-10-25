@@ -52,6 +52,7 @@ export default function AgentDashboard({ user, onLogout }) {
   const [managerPhone, setManagerPhone] = useState('0535623106');
   const [mySales, setMySales] = useState([]);
   const [dailyTarget, setDailyTarget] = useState(50);
+  const [commissionOverride, setCommissionOverride] = useState(null);
   const [myIssues, setMyIssues] = useState([]);
   const [myCounts, setMyCounts] = useState([]);
   const [offlineQueue, setOfflineQueue] = useState([]);
@@ -210,13 +211,14 @@ export default function AgentDashboard({ user, onLogout }) {
       await Promise.all([fetchRoutes(), fetchProducts(), fetchMySales(), fetchMyIssues(), fetchMyCounts(), fetchMyEditRequests(), fetchManagerPhone(), refreshPendingCount()]);
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('daily_target')
+        .select('daily_target, commission_override')
         .eq('id', user.id)
         .maybeSingle();
         
       if (!profileError && profileData?.daily_target) { 
         setDailyTarget(profileData.daily_target); 
         await saveCache('target', profileData.daily_target); 
+        setCommissionOverride(profileData.commission_override ?? null);
       }
       setLastSyncedAt(new Date());
     } catch (err) {
@@ -404,7 +406,7 @@ export default function AgentDashboard({ user, onLogout }) {
         actual_cash: paymentType === 'credit' ? 0 : cash, 
         payment_type: paymentType, 
         momo_ref: paymentType === 'momo' ? momoRef.trim() : null, 
-        commission_earned: 0, 
+        commission_earned: (paymentType === 'credit' ? 0 : (expectedCash * (commissionOverride != null ? commissionOverride : (item.product.commission_rate || 0)))),
         store_name: storeInput.trim(), 
         latitude: location?.coords?.latitude || null, 
         longitude: location?.coords?.longitude || null, 
